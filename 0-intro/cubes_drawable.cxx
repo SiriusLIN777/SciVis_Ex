@@ -70,8 +70,25 @@ protected:
 	enum PrimitiveMode {
 		QUADS,
 		TRIANGLES,
-		TRIANGLE_STRIP} primitive_mode, temp;
+		TRIANGLE_STRIP
+	} primitive_mode, temp;
 	unsigned int GL_Primitive;
+
+	// (non-)interleaved mode selection enum
+	// INTERLEAVED = 0, SINGLE_VBO = 1, MULTI_VBO = 2
+	enum InterleavedMode {
+		INTERLEAVED,
+		SINGLE_VBO,
+		MULTI_VBO
+	} interleaved_mode;
+	int interleaved;
+	
+	// Test dropdown
+	enum TestDropdown {
+		TEST0,
+		TEST1,
+		TEST2
+	} test_dropdown, test_dd;
 
 	////
 	// Internal stuff we don't expose via reflection
@@ -88,8 +105,15 @@ protected:
 		cgv::vec3 normal;
 		cgv::vec4 color;
 	};
+	// Vertices for interleaved mode.
 	std::vector<vertex_cube> vertices_cube;
-	cgv::render::vertex_buffer vb_cube;
+	// Vertices for non-interleaved mode.
+	std::vector<cgv::vec3> vertices_cube_pos;
+	std::vector<cgv::vec3> vertices_cube_normal;
+	std::vector<cgv::vec4> vertices_cube_color;
+	// Vertex buffer.
+	cgv::render::vertex_buffer vb_cube; // ... for interleaved mode
+	cgv::render::vertex_buffer vb_cube_non_interleaved; // ... for non-interleaved mode
 	cgv::render::attribute_array_binding vertex_array_cube;
 
 	float cube_color_r, cube_color_g, cube_color_b;
@@ -101,7 +125,8 @@ public:
 	cubes_drawable()
 		: fb_invalid(true),
 		draw_backside(true), wireframe(false), draw_my_quad(true),
-		primitive_mode(QUADS), GL_Primitive(GL_QUADS), cube_color(1.0f), recursion_depth(0), max_recursion_depth(8)
+		primitive_mode(QUADS), GL_Primitive(GL_QUADS), cube_color(1.0f), recursion_depth(0), max_recursion_depth(8),
+		interleaved_mode(INTERLEAVED), interleaved(0)
 	{
 
 	}
@@ -126,7 +151,8 @@ public:
 			rh.reflect_member("cube_color_g", cube_color_g) &&
 			rh.reflect_member("cube_color_b", cube_color_b) &&
 			rh.reflect_member("recursion_depth", recursion_depth) &&
-			rh.reflect_member("max_recursion_depth", max_recursion_depth);
+			rh.reflect_member("max_recursion_depth", max_recursion_depth) &&
+			rh.reflect_member("test_dropdown", test_dropdown);
 	}
 
 	// Part of the cgv::base::base interface, should be implemented to respond to write
@@ -154,6 +180,13 @@ public:
 		//// originate from GUI interaction
 		update_member(member_ptr);
 
+		if (member_ptr == &test_dropdown) {
+			test_dd = test_dropdown;
+		}
+		if (member_ptr == &test_dd) {
+			test_dropdown = test_dd;
+		}
+		update_member(member_ptr);
 
 		// Also trigger a redraw in case the drawable node is active
 		if (this->is_visible())
@@ -161,18 +194,13 @@ public:
 	}
 
 	// We use this for validating GUI input
-	bool gui_check_value(cgv::gui::control<int>& ctrl)
-	{
-		// Check passed
-		return true;
-	}
 	bool gui_check_value_primitive(cgv::gui::control<cubes_drawable::PrimitiveMode>& ctrl)
 	{
 		INFO("Now in gui_check_value_primitive");
 		if (ctrl.controls(&primitive_mode))
 		{
-			DEBUG("Valid values: " << QUADS << ", " << TRIANGLES << ", " << TRIANGLE_STRIP);
-			DEBUG("get_new_value: " << ctrl.get_new_value());
+			DEBUG("Valid primitive values: " << QUADS << ", " << TRIANGLES << ", " << TRIANGLE_STRIP);
+			DEBUG("primitive get_new_value: " << ctrl.get_new_value());
 			if (ctrl.get_new_value() != QUADS
 				&& ctrl.get_new_value() != TRIANGLES
 				&& ctrl.get_new_value() != TRIANGLE_STRIP)
@@ -183,7 +211,6 @@ public:
 		}
 
 		INFO("Primitive valid");
-		temp = ctrl.get_new_value();
 		// check passed
 		return true;
 	}
@@ -204,26 +231,39 @@ public:
 		// check passed
 		return true;
 	}
+	bool gui_check_value_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
+	{
+		INFO("Now in gui_check_value_interleaved.");
+		if (ctrl.controls(&interleaved_mode))
+		{
+			DEBUG("Valid interleaved values: " << INTERLEAVED << ", " << SINGLE_VBO << ", " << MULTI_VBO);
+			DEBUG("interleaved get_new_value: " << ctrl.get_new_value());
+			if (ctrl.get_new_value() != INTERLEAVED
+				&& ctrl.get_new_value() != SINGLE_VBO
+				&& ctrl.get_new_value() != MULTI_VBO)
+			{
+				INFO("Interleaved mode invalid: " << ctrl.get_new_value());
+				return false;
+			}
+		}
+
+		INFO("Interleaved mode valid");
+		// check passed
+		return true;
+	}
 
 	// We use this for acting upon validated GUI input
-	void gui_value_changed(cgv::gui::control<int>& ctrl)
-	{
-		//if (ctrl.controls(&fb_resolution.x()) || ctrl.controls(&fb_resolution.y()))
-		//	// Indicate that the framebuffer must be reinitialized
-		//	fb_invalid = true;
-
-		// Redraw the scene
-		post_redraw();
-	}
 	void gui_value_changed_primitive(cgv::gui::control<cubes_drawable::PrimitiveMode>& ctrl)
 	{
 		INFO("Now in gui_value_changed_primitive ...");
-		DEBUG("ctrl.controls(&primitive_mode): " << ctrl.get_new_value());
+		DEBUG("ctrl.controls(&primitive_mode): " << ctrl.controls(&primitive_mode));
+		DEBUG("primitive ctrl.get_new_value(): " << ctrl.get_new_value());
 		if (ctrl.controls(&primitive_mode))
 		{
 			INFO("Now,changing the GL_Primitive...");
-			DEBUG("gui_value_changed: ctrl.get_new_value(): " << ctrl.get_new_value());
-			switch (ctrl.controls(&primitive_mode)) {
+			auto tmp = ctrl.controls(&primitive_mode);
+			DEBUG("primitive tmp: " << tmp);
+			switch (ctrl.get_new_value()) {
 			case QUADS:
 			{
 				INFO("Mode -> GL_QUADS");
@@ -265,6 +305,48 @@ public:
 		// Redraw the scene
 		post_redraw();
 	}
+	void gui_value_changed_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
+	{
+		INFO("Now in gui_value_changed_interleaved.");
+		DEBUG("ctrl.controls(&interleaved_mode): " << ctrl.controls(&interleaved_mode));
+		DEBUG("interleaved ctrl.get_new_value(): " << ctrl.get_new_value());
+		if (ctrl.controls(&interleaved_mode))
+		{
+			INFO("Now,changing the GL_Primitive...");
+			switch (ctrl.get_new_value()) {
+			case INTERLEAVED:
+			{
+				INFO("Mode -> INTERLEAVED");
+				interleaved = 0;
+				break;
+			}
+			case SINGLE_VBO:
+			{
+				INFO("Mode -> SINGLE_VBO");
+				interleaved = 1;
+				break;
+			}
+			case MULTI_VBO:
+			{
+				INFO("Mode -> MULTI_VBO");
+				interleaved = 2;
+				break;
+			}
+			default:
+			{
+				INFO("Mode default -> INTERLEAVED");
+				interleaved = 0;
+				ERROR("Unsupported interleaved TYPE: " << ctrl.get_new_value());
+			}
+			DEBUG("[ 0 = INTERLEAVED; 1 = SINGLE_VBO; 2 = MULTI_VBO ] after switch case, interleaved: " << interleaved);
+			}
+
+		}
+		INFO("interleaved: " << interleaved);
+
+		// Redraw the scene
+		post_redraw();
+	}
 
 	// Required interface for cgv::gui::provider
 	void create_gui(void)
@@ -291,7 +373,7 @@ public:
 		cgv::signal::connect(ctrl_recursion->check_value, this, &cubes_drawable::gui_check_value_depth);
 		cgv::signal::connect(ctrl_recursion->value_change, this, &cubes_drawable::gui_value_changed_depth);
 
-		// Control for GL primitive mode selection
+		// ... for GL primitive mode selection
 		cgv::gui::control<PrimitiveMode>* ctrl_primitive = add_control(
 			"primitive mode", primitive_mode, "dropdown",
 			"enums='QUADS,TRIANGLES,TRIANGLE_STRIP'"
@@ -299,7 +381,23 @@ public:
 		cgv::signal::connect(ctrl_primitive->check_value, this, &cubes_drawable::gui_check_value_primitive);
 		cgv::signal::connect(ctrl_primitive->value_change, this, &cubes_drawable::gui_value_changed_primitive);
 
+		// ... for switch interleaved/non-interleaved(Single/Multi VBO) mode.
+		// INTERLEAVED = 0, SINGLE_VBO = 1, MULTI_VBO = 2
+		cgv::gui::control<InterleavedMode>* ctrl_interleaved = add_control(
+			"interleaved mode", interleaved_mode, "dropdown",
+			"enums='INTERLEAVED,SINGLE_VBO,MULTI_VBO'"
+		).operator->();
+		cgv::signal::connect(ctrl_interleaved->check_value, this, &cubes_drawable::gui_check_value_interleaved);
+		cgv::signal::connect(ctrl_interleaved->value_change, this, &cubes_drawable::gui_value_changed_interleaved);
+
+		// ... for change cube color
 		add_member_control(this, "cube color", cube_color);
+
+		// ... for test dropdown
+		add_member_control(
+			this, "test dropdown", test_dropdown, "dropdown",
+			"enums='TEST0,TEST1,TEST2'"
+		);
 	}
 
 
@@ -407,8 +505,13 @@ public:
 	// Creates geometry for the cube
 	void init_unit_cube_geometry(void)
 	{
+		int vertices_cube_size = 36;
 		// Prepare array
-		vertices_cube.resize(36);
+		vertices_cube.resize(vertices_cube_size);
+		vertices_cube_pos.resize(vertices_cube_size);
+		vertices_cube_normal.resize(vertices_cube_size);
+		vertices_cube_color.resize(vertices_cube_size);
+
 		// Set the Points.
 
 /*
@@ -455,7 +558,6 @@ public:
 		vertices_cube[16].normal = cgv::vec3(0, -1, 0);
 		vertices_cube[17].normal = cgv::vec3(0, -1, 0);
 */
-
 
 		/// GL_TRIANGLES
 		//Left face
@@ -549,6 +651,12 @@ public:
 		vertices_cube[34].normal = cgv::vec3(1, 0, 0);
 		vertices_cube[35].normal = cgv::vec3(1, 0, 0);
 
+		for (int i = 0; i < vertices_cube.size() - 1; i++)
+		{
+			vertices_cube_pos[i] = vertices_cube[i].pos;
+			vertices_cube_normal[i] = vertices_cube[i].normal;
+			vertices_cube_color[i] = vertices_cube[i].color;
+		}
 
 
 /*
@@ -629,6 +737,7 @@ public:
 		DEBUG("Drawing, recursion_depth: " << recursion_depth << ", max_recursion_depth: " << max_recursion_depth);
 		fractal->use_vertex_array(&vertex_array_cube, vertices_cube.size(), GL_Primitive);
 		fractal->draw_recursive(ctx, cube_color, recursion_depth);
+		ERROR("Test DD: " << test_dd << ", ==:" << (test_dd==TEST0));
 	}
 
 };
