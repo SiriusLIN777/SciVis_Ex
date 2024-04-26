@@ -1,0 +1,9 @@
+# Ignore Build output
+cmake-build*
+build
+
+# Ignore Jetbrains configurations
+.idea
+
+# Ignore later changes to the VSCode configuration
+.vscode
