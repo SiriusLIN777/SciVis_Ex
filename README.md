@@ -126,3 +126,9 @@ Note: Exercises require a functioning X11 server for visual output.
   ```
 
 Adjust the devcontainer configuration file according to your OS.
+
+## Noticeable Points from Sirius
+Here write down some need to be noticed problems that I meet in the dev.
+
+###
+1. Do not use any if/switch in the init callback, everything in they will not work, no idea.
