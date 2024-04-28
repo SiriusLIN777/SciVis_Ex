@@ -10,9 +10,9 @@
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define DEBUG_MODE
-#define INFO_MODE
-#define ERROR_MODE
+//#define DEBUG_MODE
+//#define INFO_MODE
+//#define ERROR_MODE
 
 #ifdef DEBUG_MODE
 #define DEBUG(debugMsg) do { \

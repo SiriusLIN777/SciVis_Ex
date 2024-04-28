@@ -6,6 +6,10 @@
 // the scene graph, drawing primitives, creating a GUI, using a config file and various
 // other parts of the framework.
 
+#define DEBUG_MODE
+#define INFO_MODE
+#define ERROR_MODE
+
 // Framework core
 #include <cgv/base/register.h>
 #include <cgv/gui/provider.h>
@@ -52,8 +56,6 @@ protected:
 	////
 	// Stuff we expose via reflection
 
-	std::string test;
-
 	// Cube vertices size
 	int vertices_cube_size;
 
@@ -62,8 +64,6 @@ protected:
 
 	// Whether to draw the backside of the quad
 	bool draw_backside;
-
-	bool draw_my_quad;
 
 	// Recursion depth
 	int recursion_depth;
@@ -78,11 +78,10 @@ protected:
 	unsigned int GL_Primitive;
 
 	// (non-)interleaved mode selection enum
-	// INTERLEAVED = 0, SINGLE_VBO = 1, MULTI_VBO = 2
+	// INTERLEAVED = 0, NON_INTERLEAVED_SINGLE_VBO = 1, BUILTIN = 2
 	enum InterleavedMode {
 		INTERLEAVED,
-		SINGLE_VBO,
-		MULTI_VBO,
+		NON_INTERLEAVED_SINGLE_VBO,
 		BUILTIN
 	} interleaved_mode, interleaved_tmp;
 	int interleaved;
@@ -133,8 +132,10 @@ public:
 	cubes_drawable()
 		: vertices_cube_size(36),
 		fb_invalid(true),
-		draw_backside(true), wireframe(false), draw_my_quad(true),
-		primitive_mode(TRIANGLES),primitive(TRIANGLES), GL_Primitive(GL_QUADS), cube_color(1.0f), recursion_depth(0), max_recursion_depth(8),
+		draw_backside(true), wireframe(false),
+		primitive_mode(TRIANGLES),primitive(TRIANGLES), GL_Primitive(GL_QUADS),
+		cube_color_r(0.0f), cube_color_g(0.2f), cube_color_b(0.9f), cube_color(cube_color_r, cube_color_g, cube_color_b),
+		recursion_depth(0), max_recursion_depth(8),
 		interleaved_mode(INTERLEAVED), interleaved(INTERLEAVED)
 		//interleaved_mode(SINGLE_VBO), interleaved(SINGLE_VBO)
 	{
@@ -155,7 +156,6 @@ public:
 		return
 			rh.reflect_member("wireframe", wireframe) &&
 			rh.reflect_member("draw_backside", draw_backside) &&
-			rh.reflect_member("draw_my_quad", draw_my_quad) &&
 			rh.reflect_member("primitive_mode", primitive_mode) &&
 			rh.reflect_member("cube_color_r", cube_color_r) &&
 			rh.reflect_member("cube_color_g", cube_color_g) &&
@@ -257,7 +257,7 @@ public:
 		// check passed
 		return true;
 	}
-	bool gui_check_value_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
+	/*bool gui_check_value_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
 	{
 		INFO("Now in gui_check_value_interleaved.");
 		if (ctrl.controls(&interleaved_mode))
@@ -276,7 +276,7 @@ public:
 		INFO("Interleaved mode valid");
 		// check passed
 		return true;
-	}
+	}*/
 
 	// We use this for acting upon validated GUI input
 	void gui_value_changed_primitive(cgv::gui::control<cubes_drawable::PrimitiveMode>& ctrl)
@@ -331,7 +331,7 @@ public:
 		// Redraw the scene
 		post_redraw();
 	}
-	void gui_value_changed_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
+	/*void gui_value_changed_interleaved(cgv::gui::control<cubes_drawable::InterleavedMode>& ctrl)
 	{
 		INFO("Now in gui_value_changed_interleaved.");
 		DEBUG("ctrl.controls(&interleaved_mode): " << ctrl.controls(&interleaved_mode));
@@ -372,7 +372,8 @@ public:
 
 		// Redraw the scene
 		post_redraw();
-	}
+	}*/
+
 
 	// Required interface for cgv::gui::provider
 	void create_gui(void)
@@ -425,7 +426,7 @@ public:
 		*/
 		add_member_control(
 			this, "interleaved mode", interleaved_mode, "dropdown",
-			"enums='INTERLEAVED,SINGLE_VBO,MULTI_VBO,BUILTIN'"
+			"enums='INTERLEAVED,NON_INTERLEAVED_SINGLE_VBO,BUILTIN'"
 		);
 
 		// ... for change cube color
@@ -451,11 +452,11 @@ public:
 		// - generate actual geometry
 		init_unit_cube_geometry();
 		
-		if (interleaved_mode == INTERLEAVED)
+		/* if (interleaved_mode == INTERLEAVED)
 		{
 					
 		}
-		else if (interleaved_mode == SINGLE_VBO)
+		else if (interleaved_mode == NON_INTERLEAVED_SINGLE_VBO)
 		{
 			
 		}
@@ -493,14 +494,14 @@ public:
 			// Set normal.
 			success = vertex_array_cube_mVBO_normal.set_attribute_array(
 				ctx, surface_shader.get_normal_index(), vec3type_mVBO_normal, vb_cube_mVBO_normal,
-				0 /*sizeof(cgv::vec3) * vertices_cube_pos.size()*/, // no offset
+				0, // no offset
 				vertices_cube_normal.size(), // number of normal elements in the array
 				sizeof(cgv::vec3) // no stride for multi vbo
 			) && success;
 			// Set color.
 			success = vertex_array_cube_mVBO_color.set_attribute_array(
 				ctx, surface_shader.get_color_index(), vec4type_mVBO_color, vb_cube_mVBO_color,
-				0 /*(sizeof(cgv::vec3) * vertices_cube_pos.size()) + (sizeof(cgv::vec3) * vertices_cube_normal.size())*/, // no offset
+				0, // no offset
 				vertices_cube_color.size(), // number of color elements in the array
 				sizeof(cgv::vec4) // No stride for multi vbo
 			) && success;
@@ -547,78 +548,78 @@ public:
 				vertices_cube.size(), // number of color elements in the array
 				sizeof(vertex_cube) // stride from one element to next
 			) && success;
-		}
+		}*/
 
-		// INTERLEAVED
-			// - obtain type descriptors for the automatic array binding facilities of the
-			//   framework
-			cgv::render::type_descriptor
-				vec3type_pos =
-				cgv::render::element_descriptor_traits<cgv::vec3>
-				::get_type_descriptor(vertices_cube[0].pos),
-				vec3type_normal =
-				cgv::render::element_descriptor_traits<cgv::vec3>
-				::get_type_descriptor(vertices_cube[0].normal),
-				vec4type_color =
-				cgv::render::element_descriptor_traits<cgv::vec4>
-				::get_type_descriptor(vertices_cube[0].color);
+		// INTERLEAVED --- 
+		// - obtain type descriptors for the automatic array binding facilities of the
+		//   framework
+		cgv::render::type_descriptor
+			vec3type_pos =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_cube[0].pos),
+			vec3type_normal =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_cube[0].normal),
+			vec4type_color =
+			cgv::render::element_descriptor_traits<cgv::vec4>
+			::get_type_descriptor(vertices_cube[0].color);
 
-			// - create buffer objects
-			success = vb_cube.create(ctx, &(vertices_cube[0]), vertices_cube.size()) && success;
-			success = vertex_array_cube.create(ctx) && success;
+		// - create buffer objects
+		success = vb_cube.create(ctx, &(vertices_cube[0]), vertices_cube.size()) && success;
+		success = vertex_array_cube.create(ctx) && success;
 
-			// Set attribute array - Interleaved
-			// Set position.
-			success = vertex_array_cube.set_attribute_array(
-				ctx, surface_shader.get_position_index(), vec3type_pos, vb_cube,
-				0, // position is at start of the struct <-> offset = 0
-				vertices_cube.size(), // number of position elements in the array
-				sizeof(vertex_cube) // stride from one element to next
-			) && success;
-			// Set normal.
-			success = vertex_array_cube.set_attribute_array(
-				ctx, surface_shader.get_normal_index(), vec3type_normal, vb_cube,
-				sizeof(cgv::vec3), // normal coords follow after position
-				vertices_cube.size(), // number of normal elements in the array
-				sizeof(vertex_cube) // stride from one element to next
-			) && success;
-			// Set color.
-			success = vertex_array_cube.set_attribute_array(
-				ctx, surface_shader.get_color_index(), vec4type_color, vb_cube,
-				sizeof(cgv::vec3) * 2, // color vec follow after pos and mormal
-				vertices_cube.size(), // number of color elements in the array
-				sizeof(vertex_cube) // stride from one element to next
-			) && success;
+		// - Set attribute array - Interleaved
+		// - Set position.
+		success = vertex_array_cube.set_attribute_array(
+			ctx, surface_shader.get_position_index(), vec3type_pos, vb_cube,
+			0, // position is at start of the struct <-> offset = 0
+			vertices_cube.size(), // number of position elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
+		// - Set normal.
+		success = vertex_array_cube.set_attribute_array(
+			ctx, surface_shader.get_normal_index(), vec3type_normal, vb_cube,
+			sizeof(cgv::vec3), // normal coords follow after position
+			vertices_cube.size(), // number of normal elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
+		// - Set color.
+		success = vertex_array_cube.set_attribute_array(
+			ctx, surface_shader.get_color_index(), vec4type_color, vb_cube,
+			sizeof(cgv::vec3) * 2, // color vec follow after pos and mormal
+			vertices_cube.size(), // number of color elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
 
-			// SINGLE VBO
-			// - non-interleaved single vbo.
-			cgv::render::type_descriptor
-				vec3type_sVBO_pos =
-				cgv::render::element_descriptor_traits<cgv::vec3>
-				::get_type_descriptor(vertices_sVBO[0]),
-				vec3type_sVBO_normal =
-				cgv::render::element_descriptor_traits<cgv::vec3>
-				::get_type_descriptor(vertices_sVBO[vertices_cube_size]);
+		// SINGLE VBO ---
+		// - non-interleaved single vbo.
+		cgv::render::type_descriptor
+			vec3type_sVBO_pos =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_sVBO[0]),
+			vec3type_sVBO_normal =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_sVBO[vertices_cube_size]);
 
-			// Single VBO.
-			success = vb_cube_sVBO.create(ctx, &(vertices_sVBO[0]), vertices_sVBO.size()) && success;
-			success = vertex_array_cube_sVBO.create(ctx) && success;
+		// - create VBO.
+		success = vb_cube_sVBO.create(ctx, &(vertices_sVBO[0]), vertices_sVBO.size()) && success;
+		success = vertex_array_cube_sVBO.create(ctx) && success;
 
-			// Set attribute array - Interleaved - Single VBO
-			// Set position.
-			success = vertex_array_cube_sVBO.set_attribute_array(
-				ctx, surface_shader.get_position_index(), vec3type_sVBO_pos, vb_cube_sVBO,
-				0, // no offset
-				vertices_cube_pos.size(), // number of position elements in the array
-				0 // no stride for multi vbo
-			) && success;
-			// Set normal.
-			success = vertex_array_cube_sVBO.set_attribute_array(
-				ctx, surface_shader.get_normal_index(), vec3type_sVBO_normal, vb_cube_sVBO,
-				sizeof(cgv::vec3) * vertices_cube_pos.size(), // no offset
-				vertices_cube_normal.size(), // number of normal elements in the array
-				0 // no stride for multi vbo
-			) && success;
+		// - Set attribute array - Interleaved - Single VBO
+		// - Set position.
+		success = vertex_array_cube_sVBO.set_attribute_array(
+			ctx, surface_shader.get_position_index(), vec3type_sVBO_pos, vb_cube_sVBO,
+			0, // no offset
+			vertices_cube_pos.size(), // number of position elements in the array
+			0 // no stride for multi vbo
+		) && success;
+		// - Set normal.
+		success = vertex_array_cube_sVBO.set_attribute_array(
+			ctx, surface_shader.get_normal_index(), vec3type_sVBO_normal, vb_cube_sVBO,
+			sizeof(cgv::vec3) * vertices_cube_pos.size(), // no offset
+			vertices_cube_normal.size(), // number of normal elements in the array
+			0 // no stride for multi vbo
+		) && success;
 
 		// Flag offscreen framebuffer as taken care of
 		fb_invalid = false;
@@ -1039,18 +1040,18 @@ vertices_cube[35].normal = cgv::vec3(0, -1, 0);
 			DEBUG("interleaved_mode -> INTERLEAVED: " << interleaved_mode);
 			fractal->use_vertex_array(&vertex_array_cube, vertices_cube.size(), GL_Primitive);
 		}
-		else if (interleaved_mode == SINGLE_VBO)
+		else if (interleaved_mode == NON_INTERLEAVED_SINGLE_VBO)
 		{
 			DEBUG("interleaved_mode -> SINGLE_VBO: " << interleaved_mode);
 			fractal->use_vertex_array(&vertex_array_cube_sVBO, vertices_cube.size(), GL_Primitive);
 		}
-		else if (interleaved_mode == MULTI_VBO)
+		/*else if (interleaved_mode == MULTI_VBO)
 		{
 			DEBUG("interleaved_mode -> MULTI_VBO: " << interleaved_mode);
 			fractal->use_vertex_array(&vertex_array_cube_mVBO_pos, vertices_cube.size(), GL_Primitive);
 			fractal->use_vertex_array(&vertex_array_cube_mVBO_normal, vertices_cube.size(), GL_Primitive);
 			fractal->use_vertex_array(&vertex_array_cube_mVBO_color, vertices_cube.size(), GL_Primitive);
-		}
+		}*/
 		else if (interleaved_mode == BUILTIN)
 		{
 			DEBUG("interleaved_mode -> BUILT_IN: " << interleaved_mode);
