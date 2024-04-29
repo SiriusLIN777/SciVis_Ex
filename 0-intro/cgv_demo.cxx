@@ -6,6 +6,14 @@
 // the scene graph, drawing primitives, creating a GUI, using a config file and various
 // other parts of the framework.
 
+
+
+// ************************************************************************************/
+// 
+// &&& NOTE &&& : The registration of cgv.demo is commented out.
+//
+// ************************************************************************************/
+
 // Framework core
 #include <cgv/base/register.h>
 #include <cgv/gui/provider.h>
@@ -128,7 +136,7 @@ public:
 		  fb_resolution(512, 256), fb_invalid(true),
 		  texture("uint8[R,G,B,A]", cgv::render::TF_LINEAR, cgv::render::TF_LINEAR),
 		  fb_bgcolor_r(0.9f), fb_bgcolor_g(0.9f), fb_bgcolor_b(0.9f),
-		  bgcolor(fb_bgcolor_r, fb_bgcolor_g, fb_bgcolor_b), draw_backside(true), wireframe(false), draw_my_quad(true)
+		  bgcolor(fb_bgcolor_r, fb_bgcolor_g, fb_bgcolor_b), draw_backside(true), wireframe(false), draw_my_quad(false)
 	{
 		// Make sure the font server knows about the fonts packaged with the exercise
 		cgv::scan_fonts("./data/Fonts");
@@ -865,10 +873,10 @@ public:
 // upon plugin load. Instead, the user can create an instance from the application menu.
 // However, config files are not straight-forward to use in this case, which is why we
 // go for the method above.
-/*
+
 	cgv::base::factory_registration<cgv_demo> cgv_demo_factory(
 		"new/cgv_demo", // menu path
 		'D',            // the shortcut - capital D means ctrl+d
 		true            // whether the class is supposed to be a singleton
 	);
-*/
+

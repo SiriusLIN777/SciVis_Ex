@@ -30,6 +30,7 @@
 
 // Debug tools
 #include "debug_macros.h"
+#include <chrono>
 
 // ************************************************************************************/
 // Task 1.2a: Create a drawable that provides a (for now, empty) GUI and supports
@@ -44,6 +45,32 @@
 //            array object for rendering the cubes. The vertex array functionality 
 //            should support (again, configurable via GUI and config file) both
 //            interleaved (as in cgv_demo.cpp) and non-interleaved attributes.
+
+// ************************************************************************************/
+// 
+// &&& NOTE: The registration of cgv.demo is commented out.
+// 
+// Task 1.2 a (√)
+// Task 1.2 b (√)
+// Task 1.2 c (√)
+// Task 1.3.1 a (√): Exp ev. : recursion level-1， repeat render 10 times.
+//					  | round\time | All_in_One | Unit Cube | 
+//                    ---------------------------------------
+//                    |   1    \      1722 ms   |  1928 ms  |
+//                    |   2     \     1649 ms   |  1485 ms  |
+//                    |   3      \    1861 ms   |  1640 ms  |
+//                    |   4       \   2276 ms   |  1598 ms  |
+//                    |   5        |  1781 ms   |  1629 ms  |
+//                    |   6        |  1519 ms   |  1892 ms  |
+//                    |   7        |  1544 ms   |  1910 ms  |
+//                    |   8        |  1491 ms   |  1930 ms  |
+//                    |   9        |  1419 ms   |  1766 ms  |
+//                    |  10        |  1514 ms   |  1525 ms  |
+//                    |  AVG       |  1678 ms   |  1714 ms  |
+//        Conclusion: The rendering time of all_in_one geometry is less than unit geometry, 
+//                    the possible reason can be less draw-call used for all_in_one 
+//                    geometry, and for unit geometry each cube needs one draw-call.
+
 
 // The CGV framework demonstration class
 class cubes_drawable
@@ -78,11 +105,12 @@ protected:
 	unsigned int GL_Primitive;
 
 	// (non-)interleaved mode selection enum
-	// INTERLEAVED = 0, NON_INTERLEAVED_SINGLE_VBO = 1, BUILTIN = 2
+	// INTERLEAVED = 0, NON_INTERLEAVED_SINGLE_VBO = 1, BUILTIN = 2, ALL_in_ONE = 3
 	enum InterleavedMode {
 		INTERLEAVED,
 		NON_INTERLEAVED_SINGLE_VBO,
-		BUILTIN
+		BUILTIN,
+		ALL_in_ONE
 	} interleaved_mode, interleaved_tmp;
 	int interleaved;
 	
@@ -101,30 +129,45 @@ protected:
 		cgv::vec3 normal;
 		cgv::vec4 color;
 	};
+
 	// Vertices for interleaved mode.
 	std::vector<vertex_cube> vertices_cube;
 	// Vertices for non-interleaved mode.
 	std::vector<cgv::vec3> vertices_cube_pos;
 	std::vector<cgv::vec3> vertices_cube_normal;
 	std::vector<cgv::vec4> vertices_cube_color;
+	std::vector<cgv::vec3> vertices_sVBO;
+	// Vertices for all in one geometry.
+	std::vector<vertex_cube> vertices_AiO;
 
 	// Vertex buffer.
-	cgv::render::vertex_buffer vb_cube; // ... for interleaved mode
-	cgv::render::attribute_array_binding vertex_array_cube;// ... for interleaved mode
-	// Single VBO
+	// ... for interleaved mode
+	cgv::render::vertex_buffer vb_cube; 
+	cgv::render::attribute_array_binding vertex_array_cube;
+	// ... for non-interleaved mode
 	cgv::render::vertex_buffer vb_cube_sVBO;
 	cgv::render::attribute_array_binding vertex_array_cube_sVBO;
-	std::vector<cgv::vec3> vertices_sVBO;
-	// Multi VBO
-	cgv::render::vertex_buffer vb_cube_mVBO_pos;
-	cgv::render::vertex_buffer vb_cube_mVBO_normal;
-	cgv::render::vertex_buffer vb_cube_mVBO_color;
-	cgv::render::attribute_array_binding vertex_array_cube_mVBO_pos;
-	cgv::render::attribute_array_binding vertex_array_cube_mVBO_normal;
-	cgv::render::attribute_array_binding vertex_array_cube_mVBO_color;
+	// ... for all in one 
+	cgv::render::vertex_buffer vb_AiO;
+	cgv::render::attribute_array_binding va_AiO;
+
+	//// Multi VBO
+	//cgv::render::vertex_buffer vb_cube_mVBO_pos;
+	//cgv::render::vertex_buffer vb_cube_mVBO_normal;
+	//cgv::render::vertex_buffer vb_cube_mVBO_color;
+	//cgv::render::attribute_array_binding vertex_array_cube_mVBO_pos;
+	//cgv::render::attribute_array_binding vertex_array_cube_mVBO_normal;
+	//cgv::render::attribute_array_binding vertex_array_cube_mVBO_color;
+
+	// Used to pass reflectance information to shaders for coloring the cubes
+	cgv::media::illum::surface_material material;
 
 	float cube_color_r, cube_color_g, cube_color_b;
 	cgv::rgba cube_color;
+
+	// Array to store num of cubes in each level, and init to be 0.
+	std::vector<int> num_level;
+	
 
 public:
 
@@ -135,17 +178,20 @@ public:
 		draw_backside(true), wireframe(false),
 		primitive_mode(TRIANGLES),primitive(TRIANGLES), GL_Primitive(GL_QUADS),
 		cube_color_r(0.0f), cube_color_g(0.2f), cube_color_b(0.9f), cube_color(cube_color_r, cube_color_g, cube_color_b),
-		recursion_depth(0), max_recursion_depth(8),
-		interleaved_mode(INTERLEAVED), interleaved(INTERLEAVED)
-		//interleaved_mode(SINGLE_VBO), interleaved(SINGLE_VBO)
+		recursion_depth(1), max_recursion_depth(8),
+		interleaved_mode(NON_INTERLEAVED_SINGLE_VBO), interleaved_tmp(NON_INTERLEAVED_SINGLE_VBO), interleaved(NON_INTERLEAVED_SINGLE_VBO)
 	{
-
+		material.set_brdf_type(
+			(cgv::media::illum::BrdfType)(cgv::media::illum::BT_LAMBERTIAN | cgv::media::illum::BT_PHONG)
+		);
+		material.ref_specular_reflectance() = { .0625f, .0625f, .0625f };
+		material.ref_roughness() = .03125f;
 	}
 
 	// Should be overwritten to sensibly implement the cgv::base::named interface
 	std::string get_type_name(void) const
 	{
-		return "dubes_drawable";
+		return "cubes_drawable";
 	}
 
 	// Part of the cgv::base::base interface, can be implemented to make data members of
@@ -227,6 +273,7 @@ public:
 		{
 			DEBUG("Valid primitive values: " << QUADS << ", " << TRIANGLES << ", " << TRIANGLE_STRIP);
 			DEBUG("primitive get_new_value: " << ctrl.get_new_value());
+			
 			if (ctrl.get_new_value() != QUADS
 				&& ctrl.get_new_value() != TRIANGLES
 				&& ctrl.get_new_value() != TRIANGLE_STRIP)
@@ -326,7 +373,14 @@ public:
 	void gui_value_changed_depth(cgv::gui::control<int>& ctrl)
 	{
 		if (ctrl.controls(&recursion_depth))
-			DEBUG("recursion depth changed: "<< ctrl.controls(&recursion_depth));
+		{
+			DEBUG("recursion depth changed: " << ctrl.controls(&recursion_depth));
+			DEBUG("old depth:" << ctrl.get_old_value() << ", new depth:" << ctrl.get_new_value() << ", value:" << ctrl.get_value());
+			if (ctrl.get_old_value() != ctrl.get_value())
+			{
+				fb_invalid = true;
+			}
+		}
 
 		// Redraw the scene
 		post_redraw();
@@ -426,7 +480,7 @@ public:
 		*/
 		add_member_control(
 			this, "interleaved mode", interleaved_mode, "dropdown",
-			"enums='INTERLEAVED,NON_INTERLEAVED_SINGLE_VBO,BUILTIN'"
+			"enums='INTERLEAVED,NON_INTERLEAVED_SINGLE_VBO,BUILTIN,ALL_in_ONE'"
 		);
 
 		// ... for change cube color
@@ -550,24 +604,25 @@ public:
 			) && success;
 		}*/
 
+		#ifndef Interleaved VBO
 		// INTERLEAVED --- 
 		// - obtain type descriptors for the automatic array binding facilities of the
 		//   framework
 		cgv::render::type_descriptor
-			vec3type_pos =
-			cgv::render::element_descriptor_traits<cgv::vec3>
-			::get_type_descriptor(vertices_cube[0].pos),
-			vec3type_normal =
-			cgv::render::element_descriptor_traits<cgv::vec3>
-			::get_type_descriptor(vertices_cube[0].normal),
-			vec4type_color =
-			cgv::render::element_descriptor_traits<cgv::vec4>
-			::get_type_descriptor(vertices_cube[0].color);
-
+		vec3type_pos =
+		cgv::render::element_descriptor_traits<cgv::vec3>
+		::get_type_descriptor(vertices_cube[0].pos),
+		vec3type_normal =
+		cgv::render::element_descriptor_traits<cgv::vec3>
+		::get_type_descriptor(vertices_cube[0].normal),
+		vec4type_color =
+		cgv::render::element_descriptor_traits<cgv::vec4>
+		::get_type_descriptor(vertices_cube[0].color);
+		
 		// - create buffer objects
 		success = vb_cube.create(ctx, &(vertices_cube[0]), vertices_cube.size()) && success;
 		success = vertex_array_cube.create(ctx) && success;
-
+		
 		// - Set attribute array - Interleaved
 		// - Set position.
 		success = vertex_array_cube.set_attribute_array(
@@ -591,8 +646,11 @@ public:
 			sizeof(vertex_cube) // stride from one element to next
 		) && success;
 
+		#endif // !Interleaved VBO
+
+		#ifndef Non-Interleaved Single VBO
 		// SINGLE VBO ---
-		// - non-interleaved single vbo.
+				// - non-interleaved single vbo.
 		cgv::render::type_descriptor
 			vec3type_sVBO_pos =
 			cgv::render::element_descriptor_traits<cgv::vec3>
@@ -620,6 +678,53 @@ public:
 			vertices_cube_normal.size(), // number of normal elements in the array
 			0 // no stride for multi vbo
 		) && success;
+		#endif // !Non-Interleaved Single VBO
+
+		#ifndef All in one VBO
+		// ALL in ONE --- 
+		// - obtain type descriptors for the automatic array binding facilities of the
+		//   framework
+		cgv::render::type_descriptor
+			vec3type_AiO_pos =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_AiO[0].pos),
+			vec3type_AiO_normal =
+			cgv::render::element_descriptor_traits<cgv::vec3>
+			::get_type_descriptor(vertices_AiO[0].normal),
+			vec4type_AiO_color =
+			cgv::render::element_descriptor_traits<cgv::vec4>
+			::get_type_descriptor(vertices_AiO[0].color);
+
+		// - create buffer objects
+		success = vb_AiO.create(ctx, &(vertices_AiO[0]), vertices_AiO.size()) && success;
+		success = va_AiO.create(ctx) && success;
+		DEBUG("Init vertices_AiO.size(): " << vertices_AiO.size());
+
+		// - Set attribute array - Interleaved
+		// - Set position.
+		success = va_AiO.set_attribute_array(
+			ctx, surface_shader.get_position_index(), vec3type_AiO_pos, vb_AiO,
+			0, // position is at start of the struct <-> offset = 0
+			vertices_AiO.size(), // number of position elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
+		// - Set normal.
+		success = va_AiO.set_attribute_array(
+			ctx, surface_shader.get_normal_index(), vec3type_AiO_normal, vb_AiO,
+			sizeof(cgv::vec3), // normal coords follow after position
+			vertices_AiO.size(), // number of normal elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
+		// - Set color.
+		success = va_AiO.set_attribute_array(
+			ctx, surface_shader.get_color_index(), vec4type_AiO_color, vb_AiO,
+			sizeof(cgv::vec3) * 2, // color vec follow after pos and mormal
+			vertices_AiO.size(), // number of color elements in the array
+			sizeof(vertex_cube) // stride from one element to next
+		) && success;
+
+		#endif // !All in one VBO
+
 
 		// Flag offscreen framebuffer as taken care of
 		fb_invalid = false;
@@ -635,13 +740,25 @@ public:
 		// Check if we need to recreate anything
 		if (fb_invalid)
 		{
+			DEBUG("Fb invalied !!!");
+			vertices_AiO.clear();
+			vertices_cube.clear();
+			vertices_cube_color.clear();
+			vertices_cube_normal.clear();
+			vertices_cube_pos.clear();
+			num_level.clear();
 			init(ctx);
+
 		}
 	}
 
 	// Should be overwritten to sensibly implement the cgv::render::drawable interface
 	void draw(cgv::render::context& ctx)
 	{
+		// Test the start time of rendering.
+		auto start = std::chrono::high_resolution_clock::now();
+		INFO("Now in draw, start at " << start.time_since_epoch().count());
+
 		////
 		// Draw the contents of this node.
 
@@ -657,13 +774,18 @@ public:
 		// Enable shader program we want to use for drawing
 		default_shader.enable(ctx);
 
-		draw_my_unit_square(ctx);
+		draw_my_cube(ctx);
 
 		// Restore the attributes.
 		glPopAttrib();
 
 		// Disable shader program
 		default_shader.disable(ctx);
+
+		auto end = std::chrono::high_resolution_clock::now();
+		INFO("Now leaving draw, end at " << end.time_since_epoch().count());
+		auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+		INFO("Duration of rendering: " << duration.count() << " ms" << std::endl);
 	}
 
 	// Creates geometry for the cube
@@ -934,6 +1056,9 @@ vertices_cube[35].normal = cgv::vec3(0, -1, 0);
 			vertices_sVBO[i + vertices_cube_size] = vertices_cube_normal[i];
 		}
 		
+
+		init_all_in_one_geometry(cube_color, vertices_cube);
+
 /*
 		/// GL_QUADS		
 		//Front face
@@ -1004,45 +1129,238 @@ vertices_cube[35].normal = cgv::vec3(0, -1, 0);
 */
 	}
 
-	// Draw method for a custom quad
-	void draw_my_unit_square(cgv::render::context& ctx)
+
+	// Calculate the number of cubes for all in one geometry.
+	unsigned cal_num_cubes(unsigned max_depth)
 	{
-		INFO("Now in draw_my_unit_sqaure...");
-		/*DEBUG("Drawing, GL_Primitive: " << GL_Primitive);
-		DEBUG("Drawing, recursion_depth: " << recursion_depth << ", max_recursion_depth: " << max_recursion_depth);
-		DEBUG("Drawing, primitive_mode: " << primitive_mode);*/
-		
+		unsigned num_level = 0; // number of present level cubes.
+		unsigned last_level = 0;
+		unsigned num_cubes = 0;
+		// Calculate the number of cubes.
+		for (unsigned i = 0; i <= max_depth; i++)
+		{
+			if (i < 2)
+			{
+				num_level = i == 0 ? 1 : 4;
+				num_cubes += num_level;
+			}
+			else
+			{
+				num_level = (3 * num_level);
+				num_cubes += num_level;
+			}
+		}
+		return num_cubes;
+	}
+	// Recursive add cubes in all in one geometry
+	void add_next_level_cubes(
+		std::vector<cubes_drawable::vertex_cube> vertices_parent,
+		unsigned level, unsigned max_depth, 
+		cgv::dmat4 matrix, const cgv::media::color<float>& color_parent
+	)
+	{
+		// Schrink the cube.
+		if (level != 0)
+		{
+			matrix = matrix * cgv::math::scale4<double>(0.5, 0.5, 0.5);
+		}
+
+		// Set present level color
+		cgv::media::color<float, cgv::media::HLS> color_next_parent(color_parent);
+		color_next_parent.H() = std::fmod(color_next_parent.H() + 0.2f, 1.0f);
+		color_next_parent.S() = std::fmod(color_next_parent.S() - 0.05f, 1.0f);
+
+		unsigned num_children = level == 0 ? 4 : 3;
+		if (level < max_depth)
+		{
+			//DEBUG("Level-" << level + 1 << " : num_children-" << num_children);
+			//DEBUG("Level-" << level + 1 << " : now_child-" << num_level[level+1]);
+			auto matrix_transform = matrix;
+			for (unsigned i = 0; i < num_children; i++)
+			{
+				// Transform matrix
+				matrix_transform =
+					matrix *
+					cgv::math::rotate4<double>(signed(i) * 90 - 90, 0, 0, 1.0) *
+					cgv::math::translate4<double>(2, 0, 0);
+
+				// Vertices for this generated cube.
+				std::vector<cubes_drawable::vertex_cube> vertices_next_parent;
+				vertices_next_parent.resize(vertices_cube_size);
+
+				for (unsigned j = 0; j < vertices_cube_size; j++)
+				{
+					vertices_next_parent[j].pos = matrix_transform.mul_pos(vertices_AiO[j].pos);
+					vertices_next_parent[j].normal = matrix_transform.mul_dir(vertices_AiO[j].normal);
+					vertices_next_parent[j].color = cgv::vec4(color_next_parent.R(), color_next_parent.G(), color_next_parent.B(), 1.0f);
+
+					//DEBUG("matrix_transform.mul_pos(vertices_AiO[j].pos):" << matrix_transform.mul_pos(vertices_AiO[j].pos) << " - vertices_AiO[j].pos:"<< vertices_AiO[j].pos);
+					// Index of this cube: (num_cubes + i) * 36
+					vertices_AiO[(cal_num_cubes(level) + num_level[level + 1]) * 36 + j].pos = vertices_next_parent[j].pos;
+					vertices_AiO[(cal_num_cubes(level) + num_level[level + 1]) * 36 + j].normal = vertices_next_parent[j].normal;
+					vertices_AiO[(cal_num_cubes(level) + num_level[level + 1]) * 36 + j].color = vertices_next_parent[j].color;
+				}
+				num_level[level+1] = num_level[level+1] + 1;
+
+
+				//DEBUG("Level-" << level+1 << " : ++now_child-" << num_level[level + 1]);
+				//DEBUG("Index of this cube: " << (cal_num_cubes(level) + num_level[level + 1]-1) * 36 );
+				add_next_level_cubes(vertices_next_parent, level+1, max_depth, matrix_transform, color_next_parent);
+				vertices_next_parent.clear();
+				// Need to call add_next_level_cubes(...) for every cube in last level.
+			}
+		}
+
+	}
+	// Init the geometry for all_in_one cube.
+	void init_all_in_one_geometry(
+		const cgv::media::color<float>& color, 
+		std::vector<cubes_drawable::vertex_cube> vertices_cube)
+	{
+		// init num_level
+		num_level.resize(recursion_depth+1);
+		num_level[0] = 1;
+		for (int i = 1; i < recursion_depth; i++)
+		{
+			num_level[i] = 0;
+		}
+
+		// Matrix for schrink the present level cubes.
+		cgv::dmat4 matrix = cgv::math::scale4<double>(0.5, 0.5, 0.5);
+
+		// Set present cube as the parent cube for next level.
+		std::vector<cubes_drawable::vertex_cube> vertices_next_parent;
+		vertices_next_parent.resize(vertices_cube_size);
+		// First unit cube
+		vertices_AiO.resize(cal_num_cubes(recursion_depth) * vertices_cube_size);
+		DEBUG("vertices_AiO size: " << vertices_AiO.size());
+		DEBUG("vertices_cube_size: " << vertices_cube_size);
+		DEBUG("vertices_next_parent size: " << vertices_next_parent.size());
+		for (unsigned i=0; i<vertices_cube_size; i++)
+		{
+			vertices_next_parent[i].pos = matrix.mul_pos(vertices_cube[i].pos);
+			vertices_next_parent[i].normal = matrix.mul_dir(vertices_cube[i].normal);
+			vertices_next_parent[i].color = cgv::vec4(color.R(), color.G(), color.B(), 1.0f); 
+			vertices_AiO[i] = {vertices_next_parent[i].pos, vertices_next_parent[i].normal, vertices_next_parent[i].color};
+		}
+
+		// Call func for init next level cubes
+		cgv::media::color<float, cgv::media::HLS> color_next_parent(color);
+		add_next_level_cubes(vertices_next_parent, 0, recursion_depth, matrix, color_next_parent);
+		vertices_next_parent.clear();
+
+		DEBUG("vertices_cube_size: " << vertices_cube_size);
+		DEBUG("recursion_depth: " << recursion_depth);
+		DEBUG("vertices_AiO.size(): " << vertices_AiO.size());
+	}
+
+	/*
+	void draw_all_in_one(cgv::render::context& ctx, size_t va_num_verts, const cgv::media::color<float>& color, unsigned max_depth,
+		unsigned level)
+	{
+		// Shrink by factor of 1/2 relative to parent node
+		ctx.mul_modelview_matrix(cgv::math::scale4<double>(0.5, 0.5, 0.5));
+
+		// Render the cube
+		material.set_diffuse_reflectance(color);
+		ctx.set_material(material);
+
+		// Recurse
+		unsigned num_children = level == 0 ? 4 : 3;
+		if (level < max_depth)
+		{
+			for (unsigned i = 0; i < num_children; i++)
+			{
+				// Save transformation before recursion
+				ctx.push_modelview_matrix();
+				// Transform to node position
+				ctx.mul_modelview_matrix(
+					// rotate around z-axis by -90, 0, 90 or 180 degrees
+					cgv::math::rotate4<double>(signed(i) * 90 - 90, 0, 0, 1)
+					// move along x-axis by 2 relative units
+					* cgv::math::translate4<double>(2, 0, 0)
+				);
+				// Actual recursion
+				draw_recursive(ctx, color_next, max_depth, level + 1);
+				// Restore pre-recursion transformation
+				ctx.pop_modelview_matrix();
+			}
+		}
+
+		if (va_all_in_one)
+		{
+			// Use the vertex array
+			va_all_in_one->enable(ctx);
+			glDrawArrays(GL_Primitive, 0, (GLsizei)va_num_verts);
+			va_all_in_one->disable(ctx);
+		}
+		else
+		{
+			// Use built-in unit quad
+			ctx.tesselate_unit_cube();
+		}
+		cgv::media::color<float, cgv::media::HLS> color_next(color);
+		color_next.H() = std::fmod(color_next.H() + 0.2f, 1.0f);
+		color_next.S() = std::fmod(color_next.S() - 0.05f, 1.0f);
+
+		// Recurse
+		unsigned num_children = level == 0 ? 4 : 3;
+		if (level < max_depth) 
+		{
+			for (unsigned i = 0; i < num_children; i++)
+			{
+				// Save transformation before recursion
+				ctx.push_modelview_matrix();
+				// Transform to node position
+				ctx.mul_modelview_matrix(
+					// rotate around z-axis by -90, 0, 90 or 180 degrees
+					cgv::math::rotate4<double>(signed(i) * 90 - 90, 0, 0, 1)
+					// move along x-axis by 2 relative units
+					* cgv::math::translate4<double>(2, 0, 0)
+				);
+				// Actual recursion
+				draw_recursive(ctx, color_next, max_depth, level + 1);
+				// Restore pre-recursion transformation
+				ctx.pop_modelview_matrix();
+			}
+		}
+	}
+	*/
+
+	// Draw method for a custom quad
+	void draw_my_cube(cgv::render::context& ctx)
+	{
 		// Switch the GL_Primitive mode.
 		if(primitive_mode == QUADS)
 		{
-			DEBUG("GL_Primitive -> GL_QUADS");
+			INFO("GL_Primitive -> GL_QUADS");
 			GL_Primitive = GL_QUADS;
 		}
 		else if(primitive_mode == TRIANGLES)
 		{
-			DEBUG("GL_Primitive -> GL_TRIANGLES");
+			INFO("GL_Primitive -> GL_TRIANGLES");
 			GL_Primitive = GL_TRIANGLES;
 		}
 		else if (primitive_mode == TRIANGLE_STRIP)
 		{
-			DEBUG("GL_Primitive -> GL_TRIANGLE_STRIP");
+			INFO("GL_Primitive -> GL_TRIANGLE_STRIP");
 			GL_Primitive = GL_TRIANGLE_STRIP;
 		}
 		else
 		{
-			DEBUG("Default GL_Primitive -> GL_QUADS");
+			INFO("Default GL_Primitive -> GL_QUADS");
 			GL_Primitive = GL_QUADS;
 		}
 		
 		// Switch the interleaved mode.
 		if (interleaved_mode == INTERLEAVED)
 		{
-			DEBUG("interleaved_mode -> INTERLEAVED: " << interleaved_mode);
+			INFO("interleaved_mode -> INTERLEAVED.");
 			fractal->use_vertex_array(&vertex_array_cube, vertices_cube.size(), GL_Primitive);
 		}
 		else if (interleaved_mode == NON_INTERLEAVED_SINGLE_VBO)
 		{
-			DEBUG("interleaved_mode -> SINGLE_VBO: " << interleaved_mode);
+			INFO("interleaved_mode -> SINGLE_VBO.");
 			fractal->use_vertex_array(&vertex_array_cube_sVBO, vertices_cube.size(), GL_Primitive);
 		}
 		/*else if (interleaved_mode == MULTI_VBO)
@@ -1054,37 +1372,35 @@ vertices_cube[35].normal = cgv::vec3(0, -1, 0);
 		}*/
 		else if (interleaved_mode == BUILTIN)
 		{
-			DEBUG("interleaved_mode -> BUILT_IN: " << interleaved_mode);
+			INFO("interleaved_mode -> BUILT_IN.");
 			fractal->use_vertex_array(nullptr, 0, GL_Primitive);
+		}
+		else if (interleaved_mode == ALL_in_ONE)
+		{
+			INFO("default interleaved_mode -> ALL_in_ONE.");
 		}
 		else
 		{
 			interleaved_mode = INTERLEAVED;
-			DEBUG("default interleaved_mode -> INTERLEAVED: " << interleaved_mode);
+			INFO("default interleaved_mode -> INTERLEAVED.");
 			fractal->use_vertex_array(&vertex_array_cube, vertices_cube.size(), GL_Primitive);
 		}
-
-		/*DEBUG("vertices_cube_pos" << std::endl);
-		for (int i = 0; i < vertices_cube.size(); i++)
+				
+		if (interleaved_mode != ALL_in_ONE)
 		{
-			DEBUG("vertices_cube_pos_" << i << ": " << vertices_cube[i].pos);
-		}DEBUG("vertices_cube_normal" << std::endl);
-		for (int i = 0; i < vertices_cube.size(); i++)
-		{
-			DEBUG("vertices_cube_normal_" << i << ": " << vertices_cube[i].normal);
+			INFO("Draw Unit Cube");
+			fractal->draw_recursive(ctx, cube_color, recursion_depth);
 		}
-		DEBUG("vertices_sVBO" << std::endl);
-		for (int i = 0; i < vertices_sVBO.size() ; i++)
+		else
 		{
-			DEBUG("vertices_sVBO_" << i << ": " << vertices_sVBO[i]);
-		}*/
-
-		DEBUG("vertex_array_cube :" << vertex_array_cube.is_created());
-		DEBUG("vertex_array_cube_sVBO :" << vertex_array_cube_sVBO.is_created());
-
-		fractal->draw_recursive(ctx, cube_color, recursion_depth);
+			material.set_diffuse_reflectance(cube_color);
+			ctx.set_material(material);
+			INFO("Draw AiO Cube");
+			va_AiO.enable(ctx);
+			glDrawArrays(GL_Primitive, 0, vertices_AiO.size());
+			va_AiO.disable(ctx);
+		}
 	}
-
 };
 
 // [END] Tasks 1.2a, 1.2b and 1.2c
