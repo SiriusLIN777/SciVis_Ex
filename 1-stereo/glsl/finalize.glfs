@@ -155,7 +155,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
+             frag_color = vec4(0.299*c_0.r+0.587*c_0.g+0.114*c_0.b, 0, 0.299*c_1.r+0.587*c_1.g+0.114*c_1.b, 1.0);
 
             /***********************************************************************************/
             break;
@@ -165,7 +165,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
+             frag_color = vec4(0.299*c_0.r+0.587*c_0.g+0.114*c_0.b, 0.299*c_1.r+0.587*c_1.g+0.114*c_1.b, 0.299*c_1.r+0.587*c_1.g+0.114*c_1.b, 1.0);
 
             /***********************************************************************************/
             break;
@@ -178,7 +178,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
+             frag_color = vec4(0.299*c_0.r+0.587*c_0.g+0.114*c_0.b,c_1.g, c_1.b, 1.0);
 
             /***********************************************************************************/
             break;

@@ -637,7 +637,7 @@ public:
         // render scene for each view to the corresponding framebuffer
         for (int i = 0; i < 2; ++i) {
             // current view (-1 = left & 1 = right) which can be used as sign in the matrix computations
-            int eye = 2 * i - 1;
+            double eye = 2 * i - 1;
 
             // save current projection and modelview matrices
             ctx.push_projection_matrix();
@@ -669,41 +669,40 @@ public:
             
             cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear, mat_Pfrustum;
             
-            mat_perspective = cgv::math::stereo_perspective4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth, z_near, z_far);
-            mat_translate = cgv::math::stereo_translate4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth);
+            mat_perspective = cgv::math::stereo_perspective4(eye, eye_separation, fovy, aspect, parallax_zero_depth, z_near, z_far);
+            mat_translate = cgv::math::stereo_translate4(eye, eye_separation, fovy, aspect, parallax_zero_depth);
             mat_shear = {
                 {1,0,0,0},
                 {0,1,0,0},
-                {(0.5 * eye * eye_separation) / parallax_zero_depth,0,1,0},
+                {0,0,1,0},
                 {0,0,0,1}
             };
+            mat_shear(0, 2) = (0.5 * eye * eye_separation) / parallax_zero_depth;
             mat_Pfrustum = mat_perspective * mat_shear;
             /*
             #pragma region DEBUG_MAT
-            std::cout << "----Mat_perspective----" << std::endl;
-            for (int i = 0; i < 4; ++i) {
-                for (int j = 0; j < 4; ++j) {
-                    std::cout << mat_perspective(i, j) << " ";
-                }
-                std::cout << std::endl;
-            }
-            std::cout << "-----------------------" << std::endl;
-            std::cout << "-----Mat_translate-----" << std::endl;
+            DEBUG("eye separation: " << eye_separation);
+            DEBUG("parallax zero depth: " << parallax_zero_depth);
+            DEBUG("shear * trans: " << std::endl << mat_shear * mat_translate);
+            DEBUG("trans(0,3): " << mat_translate(0, 3));
+            DEBUG("shear(0,3): " << mat_shear(0, 2));
+
+            DEBUG("-----Mat_translate-----");
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
                     std::cout << mat_translate(i, j) << " ";
                 }
                 std::cout << std::endl;
             }
-            std::cout << "-----------------------" << std::endl;
-            std::cout << "-------Mat_shear-------" << std::endl;
+            DEBUG("-----------------------");
+            DEBUG("-------Mat_shear-------");
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
                     std::cout << mat_shear(i, j) << " ";
                 }
                 std::cout << std::endl;
             }
-            std::cout << "-----------------------" << std::endl;
+            DEBUG("-----------------------");
             #pragma endregion
             */
             if (cyclopic_lighting)
@@ -720,7 +719,6 @@ public:
 
             // store per eye modelview projection atrix to hand over to finalization pass
             MVP[i] = ctx.get_projection_matrix() * ctx.get_modelview_matrix();
-            DEBUG("MVP-" << i << ": " << std::endl << MVP[i]);
             // render scene
             render_scene(ctx);
 
