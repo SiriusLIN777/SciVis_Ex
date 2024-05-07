@@ -667,7 +667,7 @@ public:
 
              /*<your_code_here>*/
             
-            cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear;
+            cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear, mat_Pfrustum;
             
             mat_perspective = cgv::math::stereo_perspective4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth, z_near, z_far);
             mat_translate = cgv::math::stereo_translate4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth);
@@ -677,6 +677,7 @@ public:
                 {(0.5 * eye * eye_separation) / parallax_zero_depth,0,1,0},
                 {0,0,0,1}
             };
+            mat_Pfrustum = mat_perspective * mat_shear;
             /*
             #pragma region DEBUG_MAT
             std::cout << "----Mat_perspective----" << std::endl;
@@ -705,7 +706,15 @@ public:
             std::cout << "-----------------------" << std::endl;
             #pragma endregion
             */
-            ctx.set_projection_matrix(mat_perspective * mat_shear * mat_translate);
+            if (cyclopic_lighting)
+            {
+                ctx.set_projection_matrix(mat_Pfrustum * mat_translate);
+            }
+            else
+            {
+                ctx.set_projection_matrix(mat_Pfrustum);
+                ctx.set_modelview_matrix(mat_translate * ctx.get_modelview_matrix());
+            }
 
             /***********************************************************************************/
 
