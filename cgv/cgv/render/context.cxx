@@ -6,6 +6,9 @@
 #include <cgv/render/drawable.h>
 #include <cgv/render/shader_program.h>
 
+#define DEBUG_MODE
+#define INFO_MODE
+
 using namespace cgv::base;
 using namespace cgv::media::image;
 

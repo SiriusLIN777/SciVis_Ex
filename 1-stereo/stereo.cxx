@@ -2,6 +2,9 @@
 // TU Dresden. Do not distribute! 
 // Copyright (C) CGV TU Dresden - All Rights Reserved
 
+#define DEBUG_MODE  
+#define INFO_MODE
+
 #include <cgv/base/node.h> // this should be first include to avoid warning under VS
 #include <cgv/base/register.h>
 #include <cgv/data/data_view.h>
@@ -21,6 +24,7 @@
 #include <cgv/gui/event_handler.h>
 #include <cgv/gui/key_event.h>
 #include <random>
+#include "./debug_macros.h"
 
 using namespace cgv::render;
 using namespace cgv::math;
@@ -662,12 +666,52 @@ public:
                   Use the variable 'cyclopic_lighting' to make it switch between both lightings */
 
              /*<your_code_here>*/
+            
+            cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear;
+            
+            mat_perspective = cgv::math::stereo_perspective4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth, z_near, z_far);
+            mat_translate = cgv::math::stereo_translate4(static_cast<double>(eye), eye_separation, fovy, aspect, parallax_zero_depth);
+            mat_shear = {
+                {1,0,0,0},
+                {0,1,0,0},
+                {(0.5 * eye * eye_separation) / parallax_zero_depth,0,1,0},
+                {0,0,0,1}
+            };
+            /*
+            #pragma region DEBUG_MAT
+            std::cout << "----Mat_perspective----" << std::endl;
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    std::cout << mat_perspective(i, j) << " ";
+                }
+                std::cout << std::endl;
+            }
+            std::cout << "-----------------------" << std::endl;
+            std::cout << "-----Mat_translate-----" << std::endl;
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    std::cout << mat_translate(i, j) << " ";
+                }
+                std::cout << std::endl;
+            }
+            std::cout << "-----------------------" << std::endl;
+            std::cout << "-------Mat_shear-------" << std::endl;
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    std::cout << mat_shear(i, j) << " ";
+                }
+                std::cout << std::endl;
+            }
+            std::cout << "-----------------------" << std::endl;
+            #pragma endregion
+            */
+            ctx.set_projection_matrix(mat_perspective * mat_shear * mat_translate);
 
             /***********************************************************************************/
 
-            // store per eye modelview projection matrix to hand over to finalization pass
+            // store per eye modelview projection atrix to hand over to finalization pass
             MVP[i] = ctx.get_projection_matrix() * ctx.get_modelview_matrix();
-
+            DEBUG("MVP-" << i << ": " << std::endl << MVP[i]);
             // render scene
             render_scene(ctx);
 
@@ -749,6 +793,7 @@ public:
         /***********************************************************************************/
 
         // if stereo is enabled a multi pass rendering is done
+        INFO("Now calling indirect_two_pass_stereo()");
         indirect_two_pass_stereo(ctx);
 
         // renders spheres representing the eye seperation
