@@ -665,10 +665,9 @@ public:
                   matriices for cyclopic lighting.
                   Use the variable 'cyclopic_lighting' to make it switch between both lightings */
 
-             /*<your_code_here>*/
+            cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear, mat_Pfrustum, mat_frustum;
             
-            cgv::math::fmat<double, 4, 4> mat_perspective, mat_translate, mat_shear, mat_Pfrustum;
-            
+            mat_frustum = cgv::math::stereo_frustum_screen4(eye, eye_separation, screen_width, screen_height, parallax_zero_depth, z_near, z_far);
             mat_perspective = cgv::math::stereo_perspective4(eye, eye_separation, fovy, aspect, parallax_zero_depth, z_near, z_far);
             mat_translate = cgv::math::stereo_translate4(eye, eye_separation, fovy, aspect, parallax_zero_depth);
             mat_shear = {
@@ -677,16 +676,12 @@ public:
                 {0,0,1,0},
                 {0,0,0,1}
             };
-            mat_shear(0, 2) = (0.5 * eye * eye_separation) / parallax_zero_depth;
+            mat_shear(0, 2) = mat_translate(0,3)/parallax_zero_depth;
             mat_Pfrustum = mat_perspective * mat_shear;
             /*
             #pragma region DEBUG_MAT
-            DEBUG("eye separation: " << eye_separation);
             DEBUG("parallax zero depth: " << parallax_zero_depth);
-            DEBUG("shear * trans: " << std::endl << mat_shear * mat_translate);
-            DEBUG("trans(0,3): " << mat_translate(0, 3));
-            DEBUG("shear(0,3): " << mat_shear(0, 2));
-
+            
             DEBUG("-----Mat_translate-----");
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
@@ -707,11 +702,15 @@ public:
             */
             if (cyclopic_lighting)
             {
-                ctx.set_projection_matrix(mat_Pfrustum * mat_translate);
+                //ctx.set_projection_matrix(mat_Pfrustum * mat_translate);
+                ctx.set_projection_matrix(mat_frustum * mat_translate);
+                ctx.set_modelview_matrix(ctx.get_modelview_matrix());
             }
             else
             {
-                ctx.set_projection_matrix(mat_Pfrustum);
+                /*ctx.set_projection_matrix(mat_Pfrustum);
+                ctx.set_modelview_matrix(mat_translate * ctx.get_modelview_matrix());*/
+                ctx.set_projection_matrix(mat_frustum);
                 ctx.set_modelview_matrix(mat_translate * ctx.get_modelview_matrix());
             }
 
