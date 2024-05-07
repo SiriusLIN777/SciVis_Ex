@@ -726,7 +726,6 @@ public:
             ctx.pop_projection_matrix();
             ctx.pop_modelview_matrix();
         }
-
         // recover original viewport which is used to render the screen filling rectangle
         glViewport(0, 0, ctx.get_width(), ctx.get_height());
 
