@@ -26,7 +26,8 @@ uniform float parallax_scale;
 uniform int anaglyph_mode;
 
  /*<your_unforms_here>*/
-
+uniform float parallax_zero_depth;
+uniform float eye_separation;
 
 const vec4 Y = vec4(0.299, 0.587, 0.114, 0.0);
 
@@ -108,7 +109,6 @@ bool check_visibility(in float d, in vec3 size, in mat4 T, in sampler2D other_de
          c_remapped = vec4(0.0, 1.0, 0.0, 1.0); // 绿色
      }
 
-
     /************************************************************************************/
 
     return true;
@@ -166,8 +166,54 @@ void main()
               suitable transfer function to display the values. You can also integrate the slider
               parallax_scale to adjust the transfer function from the UI. */
 
-         /*<your_code_here>*/
+        /*
+        if(image_idx == 0)
+        {
+            // 计算当前视图中的纹理坐标与另一个视图中相应纹理坐标之间的差异
+            vec2 texcoord_diff = texcrd - p_1_texcrd_in_left_image;
+            // 根据传输函数计算差异映射到颜色空间
+            vec3 color = vec3(texcoord_diff * parallax_scale * 10, 0.3); // 这是一个示例传输函数，您可以根据需求调整
 
+            // 根据 image_idx 设置颜色
+            //frag_color = image_idx == 0 ? vec4(color, 0.3) : vec4(0.0, 0.8, 1.0, 0.1); // 如果需要在左右视图中显示不同的颜色，请相应地更改此处的颜色
+            frag_color = vec4(color, 0.0);
+        }
+        else if (image_idx == 1)
+        {
+            // 计算当前视图中的纹理坐标与另一个视图中相应纹理坐标之间的差异
+            vec2 texcoord_diff = p_0_texcrd_in_right_image - texcrd;
+            // 根据传输函数计算差异映射到颜色空间
+            vec3 color = vec3(texcoord_diff * parallax_scale * 10, 0.3); // 这是一个示例传输函数，您可以根据需求调整
+
+            // 设置颜色
+            frag_color = vec4(color, 0.0);
+        }
+        */
+
+        // Compute the difference of texcrd and texcoord in another img.
+        vec2 texcoord_diff;
+        if (image_idx == 0) {
+            texcoord_diff = texcrd - p_1_texcrd_in_left_image;
+        } else {
+            texcoord_diff = texcrd - p_0_texcrd_in_right_image;
+        }
+        
+        // Compute the color.
+        vec3 color;
+        if (texcoord_diff.x > 0.0) {
+            // 正值映射为红色
+            color = vec3(length(texcoord_diff), 0.0, 0.0);
+        } else {
+            // 负值映射为蓝色
+            color = vec3(0.0, 0.0, length(texcoord_diff));
+        }
+        
+        // 设置颜色，包括透明度
+        frag_color = vec4(color * parallax_scale, parallax_scale/1000);
+        
+
+         /*<your_code_here>*/
+        
         /***********************************************************************************/
         break;
     }

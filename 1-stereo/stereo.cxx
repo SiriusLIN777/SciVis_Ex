@@ -765,7 +765,9 @@ public:
         finalize_prog.set_uniform(ctx, "parallax_scale", parallax_scale);
         finalize_prog.set_uniform(ctx, "anaglyph_mode", (int&)anaglyph_mode);
         /*<your-uniforms-here>*/
-
+        finalize_prog.set_uniform(ctx, "parallax_zero_depth", parallax_zero_depth);
+        finalize_prog.set_uniform(ctx, "eye_separation", eye_separation);
+        
         // renders the screen filling rectangle
         glDisable(GL_DEPTH_TEST);
         render_screen_filling_quad(ctx, finalize_prog);
