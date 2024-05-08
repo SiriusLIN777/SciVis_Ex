@@ -194,7 +194,7 @@ public:
         srs.material.ref_roughness() = .0625f;
         material = srs.material;
 
-        enabled = false;
+        enabled = true;
         clear_color = cgv::rgb(0, 0, 0.3f);
         indirect_resolution_divisor = 1;
         translate_z = 0.0;
@@ -207,7 +207,7 @@ public:
         z_far = 100.0;
         sync_clip_planes = true;
 
-        mode = SRM_ANAGLYPH;
+        mode = SRM_PARALLAX;
         image_idx = 0;
         image_type = IT_COLOR;
         min_depth = 0;
