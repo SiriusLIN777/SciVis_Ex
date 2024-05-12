@@ -165,60 +165,28 @@ void main()
               Take care which view is selected in the UI (image_idx). And use a
               suitable transfer function to display the values. You can also integrate the slider
               parallax_scale to adjust the transfer function from the UI. */
+    
 
-        vec2 texcoord_diff;
-        vec3 cyan = vec3(0, 1, 1);
-        vec3 red = vec3(1, 0, 0);
-        vec3 color;
-        if(image_idx == 0)
-        {
-            texcoord_diff = texcrd - p_1_texcrd_in_left_image;
-        }
-        else
-        {
-            texcoord_diff = p_0_texcrd_in_right_image - texcrd;
-        }
-        
-        if(texcoord_diff.x > 0)
-        {
-            color = red;
-        }        
-        else
-        {
-            color = cyan;
-        }
-        float density = length(texcoord_diff) * parallax_scale;
-        //vec3 color = vec3(texcoord_diff * parallax_scale * 10, 0.3);
-
-        frag_color = vec4(color, 1.0) * density;
-        //frag_color = vec4(c_1);
-
-        /*
-        // Compute the difference of texcrd and texcoord in another img.
+        // Calculate parallex.
         vec2 texcoord_diff;
         if (image_idx == 0) {
             texcoord_diff = texcrd - p_1_texcrd_in_left_image;
         } else {
-            texcoord_diff = p_0_texcrd_in_right_image- texcrd;
+            texcoord_diff = p_0_texcrd_in_right_image - texcrd;
         }
-        
-        // Compute the color.
-        float density = parallax_scale * length(texcoord_diff);
-        vec3 color;
-        if (texcoord_diff.x > 0.0) {
-            // 正值映射为红色
-            color = vec3(length(texcoord_diff) *2, 0.75, 0.75);
-        } else {
-            // 负值映射为蓝色
-            color = vec3(0.7, 0.8, length(texcoord_diff)*2);
-        }
-        
-        // 设置颜色，包括透明度
-        frag_color = vec4(color * parallax_scale, parallax_scale/100);
-        */
 
-         /*<your_code_here>*/
+        // Set the fitting scale.
+        float scale = parallax_scale/4;
+    
+        // compute the blend factor.
+        float blend_factor = smoothstep(-0.1, 0.1, texcoord_diff.x * scale * 0.3);
         
+        vec3 color = mix( vec3(0.0, 1.0, 1.0), vec3(1.0, 0.0, 0.0),blend_factor);
+
+        // set the color.
+        frag_color = vec4(color, 1.0);
+
+ 
         /***********************************************************************************/
         break;
     }
